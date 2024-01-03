@@ -1,17 +1,19 @@
-import React, { Component } from "react";
 import axios from "axios";
+import JsFileDownloader from 'js-file-downloader';
+import OpenAI from 'openai';
+import React, { Component } from "react";
+import {
+  Button,
+  Col,
+  Container,
+  Form,
+  Input,
+  Jumbotron,
+  Progress,
+  Row,
+} from "reactstrap";
 import openSocket from "socket.io-client";
 import "./App.css";
-import {
-  Container,
-  Row,
-  Button,
-  Input,
-  Form,
-  Col,
-  Progress,
-  Jumbotron,
-} from "reactstrap";
 
 const URL = "/";
 const socket = openSocket(URL);
@@ -29,12 +31,13 @@ export default class App extends Component {
       blobData: null,
       videoName: "",
       videoUploader: "",
+      videoText: '', loading: false
     };
   }
 
   handleSubmit = (e) => {
     e.preventDefault();
-
+    this.setState({ ...this.state, loading: true })
     axios
       .post(
         URL,
@@ -48,9 +51,35 @@ export default class App extends Component {
         }
       )
       .then((response) => {
-        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const url = window.URL.createObjectURL(new Blob([response.data], { type: "audio/mp3" }));
         this.setState({ blobData: url });
-      });
+        new JsFileDownloader({
+          url: url, contentType: "audio/mp3", filename: 'audio.mp3'
+        })
+          .then(async (value) => {
+            // Called when download ended
+            console.log('mp3 value', value);
+            const openai = new OpenAI({
+              apiKey: process.env.REACT_APP_OPENAI_KEY, dangerouslyAllowBrowser: true
+            });
+            const transcription = await openai.audio.transcriptions.create({
+              model: 'whisper-1',
+              file: value.downloadedFile,
+            })
+
+            if (transcription.text) {
+              this.setState({ ...this.state, videoText: transcription.text });
+
+            }
+            this.setState({ ...this.state, loading: false })
+          })
+          .catch((error) => {
+            // Called when an error occurred
+            console.error(error);
+            this.setState({ ...this.state, loading: false })
+          });
+
+      }).catch(e => { this.setState({ ...this.state, loading: false }) });
   };
 
   handleTextChange = (e) => {
@@ -90,7 +119,7 @@ export default class App extends Component {
           </Row>
           <Row style={{ textAlign: "center", marginTop: "10px" }}>
             <Col>
-              <Button type="submit" color="primary" size="lg">
+              <Button type="submit" color="primary" size="lg" disabled={this.state.loading}>
                 Start Process
               </Button>
             </Col>
@@ -127,7 +156,7 @@ export default class App extends Component {
               animated={
                 (this.state.dataDownloaded * 100) /
                   this.state.dataToBeDownloaded ===
-                100
+                  100
                   ? false
                   : true
               }
@@ -135,7 +164,7 @@ export default class App extends Component {
               value={
                 this.state.dataToBeDownloaded > 0
                   ? (this.state.dataDownloaded * 100) /
-                    this.state.dataToBeDownloaded
+                  this.state.dataToBeDownloaded
                   : 0
               }
             >
@@ -153,7 +182,7 @@ export default class App extends Component {
                   href={this.state.blobData}
                   download={this.state.videoName + ".mp3"}
                 >
-                  <Button color="danger" size="lg">
+                  <Button color="danger" size="lg" disabled={this.state.loading}>
                     Download
                   </Button>
                 </a>
@@ -163,6 +192,11 @@ export default class App extends Component {
             )}
           </Col>
         </Row>
+        {this.state.videoText && (
+          <Row>
+            <p>{this.state.videoText}</p>
+          </Row>
+        )}
       </Container>
     );
   }
