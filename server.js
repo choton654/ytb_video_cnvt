@@ -55,7 +55,18 @@ app.get("/", (req, res) => {
 });
 
 app.post("/", (req, res) => {
-  getAudio(req.body.url, res);
+  // getAudio(req.body.url, res);
+  try {
+    ytdl(req.body.url, {
+      quality: "highestaudio",
+      filter: "audioonly",
+    }).pipe(fs.createWriteStream('audio.mp3'));
+    res.status(200).send('success')
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).send('error')
+  }
 });
 
 io.on("connection", (client) => {

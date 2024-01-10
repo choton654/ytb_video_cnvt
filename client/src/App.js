@@ -51,33 +51,35 @@ export default class App extends Component {
         }
       )
       .then((response) => {
+        console.log('---data---',response.data);
         const url = window.URL.createObjectURL(new Blob([response.data], { type: "audio/mp3" }));
         this.setState({ blobData: url });
-        new JsFileDownloader({
-          url: url, contentType: "audio/mp3", filename: 'audio.mp3'
-        })
-          .then(async (value) => {
-            // Called when download ended
-            console.log('mp3 value', value);
-            const openai = new OpenAI({
-              apiKey: process.env.REACT_APP_OPENAI_KEY, dangerouslyAllowBrowser: true
-            });
-            const transcription = await openai.audio.transcriptions.create({
-              model: 'whisper-1',
-              file: value.downloadedFile,
-            })
+        this.setState({ ...this.state, loading: false })
+        // new JsFileDownloader({
+        //   url: url, contentType: "audio/mp3", filename: 'audio.mp3'
+        // })
+        //   .then(async (value) => {
+        //     // Called when download ended
+        //     console.log('mp3 value', value);
+        //     const openai = new OpenAI({
+        //       apiKey: process.env.REACT_APP_OPENAI_KEY, dangerouslyAllowBrowser: true
+        //     });
+        //     const transcription = await openai.audio.transcriptions.create({
+        //       model: 'whisper-1',
+        //       file: value.downloadedFile,
+        //     })
 
-            if (transcription.text) {
-              this.setState({ ...this.state, videoText: transcription.text });
+        //     if (transcription.text) {
+        //       this.setState({ ...this.state, videoText: transcription.text });
 
-            }
-            this.setState({ ...this.state, loading: false })
-          })
-          .catch((error) => {
-            // Called when an error occurred
-            console.error(error);
-            this.setState({ ...this.state, loading: false })
-          });
+        //     }
+        //     this.setState({ ...this.state, loading: false })
+        //   })
+        //   .catch((error) => {
+        //     // Called when an error occurred
+        //     console.error(error);
+        //     this.setState({ ...this.state, loading: false })
+        //   });
 
       }).catch(e => { this.setState({ ...this.state, loading: false }) });
   };
