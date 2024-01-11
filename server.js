@@ -3,6 +3,9 @@ const ytdl = require("ytdl-core");
 const express = require("express");
 var cors = require("cors");
 var path = require("path");
+var OpenAI = require("openai");
+var axios = require("axios");
+
 const app = express();
 
 var http = require("http").createServer(app);
@@ -22,7 +25,7 @@ getAudio = (videoURL, res) => {
     filter: "audioonly",
   })
     .on("progress", (chunkSize, downloadedChunk, totalChunk) => {
-      console.log(downloadedChunk,totalChunk);
+      console.log(downloadedChunk, totalChunk);
       clientGlob.emit("progressEventSocket", [
         (downloadedChunk * 100) / totalChunk,
       ]);
@@ -48,19 +51,47 @@ app.use(express.json()); // to support JSON-encoded bodies
 app.use(express.urlencoded({ extended: true })); // to support URL-encoded bodies
 app.use(cors());
 
-app.use(express.static(path.join(__dirname,"client", "build")));
+app.use(express.static(path.join(__dirname, "client", "build")));
 
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "build","client", "index.html"));
+  res.sendFile(path.join(__dirname, "build", "client", "index.html"));
 });
 
-app.post("/", (req, res) => {
+app.post("/", async (req, res) => {
   // getAudio(req.body.url, res);
+  const openai = new OpenAI({
+    apiKey: 'your api key'
+  });
+
   try {
-    ytdl(req.body.url, {
-      quality: "highestaudio",
-      filter: "audioonly",
-    }).pipe(fs.createWriteStream('audio.mp3'));
+    const transferVideo = () => new Promise((resolve, reject) => {
+      try {
+        let stream = ytdl(req.body.url, {
+          quality: "highestaudio",
+          filter: "audioonly",
+        }).pipe(fs.createWriteStream('audio.mp3',));
+        stream.on('finish', () => {
+          resolve(true)
+
+        })
+      } catch (error) {
+        console.error(error);
+        reject(false)
+      }
+    })
+    transferVideo().then(async (d) => {
+      console.log(d);
+      const transcription = await openai.audio.transcriptions.create({
+        model: 'whisper-1',
+        file: fs.createReadStream('audio.mp3'),
+        maxBodyLength: 500 * 1024 * 1024,
+      })
+      console.log('---transcription---', transcription);
+
+    })
+
+
+
     res.status(200).send('success')
 
   } catch (error) {
