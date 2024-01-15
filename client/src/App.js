@@ -99,6 +99,7 @@ export default class App extends Component {
     });
 
     socket.on("videoDetails", (data) => {
+      console.log(data);
       this.setState({ videoName: data[0] });
       this.setState({ videoUploader: data[1] });
     });
