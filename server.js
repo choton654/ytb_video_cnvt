@@ -120,24 +120,26 @@ getAudio = async (videoURL, res) => {
           ret().then(v => {
             if (v.status === 'success') {
               fs.readdir(directoryPath, function (err, files) {
-                //handling error
+           
                 if (err) {
                   return console.log('Unable to scan directory: ' + err);
                 }
-                //listing all files using forEach
                 const audioFiles = files.filter(f => f.startsWith('audio-segment'))
-                audioFiles.forEach(async function (file) {
-                  // Do whatever you want to do with the file
-                  // console.log('---runn---',file);
+                const loopLength = audioFiles.length
+                async function doSomething(n) {
+                  if(n === 0) {
+                    console.log("TASK COMPLETED!")
+                    return
+                  }
                   const transcription = await openai.audio.transcriptions.create({
                     model: 'whisper-1',
-                    // file: fs.createReadStream('audio.mp3'),
-                    file: fs.createReadStream(path.join(__dirname, "public", "audio", file)),
+                    file: fs.createReadStream(path.join(__dirname, "public", "audio", audioFiles[n-1])),
                   })
-                  console.log('---transcription---', file,transcription);
-
-
-                });
+                  console.log('---transcription---',audioFiles[n-1],transcription);
+                  console.log("I'm doing something.")
+                  doSomething(n - 1)
+                }
+                doSomething(loopLength)
               });
             }
             console.log('--ffmpeg value---', v)
