@@ -18,8 +18,8 @@ var clientGlob = null;
 // TypeScript: import ytdl from 'ytdl-core'; with --esModuleInterop
 // TypeScript: import * as ytdl from 'ytdl-core'; with --allowSyntheticDefaultImports
 // TypeScript: import ytdl = require('ytdl-core'); with neither of the above
-// const smallLink = 'https://www.youtube.com/watch?v=eZe9q1GxR8g'
-// const biglink = 'https://www.youtube.com/watch?v=3ha-kqV0P38'
+// const smallLink = 'https://www.youtube.com/watch?v=nT6Be1Bqfoc'
+// const biglink = 'https://www.youtube.com/watch?v=QO66N1LrNCg'
 const openai = new OpenAI({
   apiKey: ''
 });
@@ -73,7 +73,7 @@ getAudio = async (videoURL, res) => {
 
     const ret = () => new Promise((resolve, reject) => {
       // 300 second segments
-      const sCommand = `ffmpeg -i "${sourceAudio}" -f segment -segment_time 300 ${outputAudio}`
+      const sCommand = `ffmpeg -i "${sourceAudio}" -f segment -segment_time 1500 ${outputAudio}`
 
       cp.exec(sCommand, (error, stdout, stderr) => {
 
@@ -128,13 +128,13 @@ getAudio = async (videoURL, res) => {
                 const audioFiles = files.filter(f => f.startsWith('audio-segment'))
                 audioFiles.forEach(async function (file) {
                   // Do whatever you want to do with the file
-                  console.log(file);
+                  // console.log('---runn---',file);
                   const transcription = await openai.audio.transcriptions.create({
                     model: 'whisper-1',
                     // file: fs.createReadStream('audio.mp3'),
                     file: fs.createReadStream(path.join(__dirname, "public", "audio", file)),
                   })
-                  console.log('---transcription---', transcription);
+                  console.log('---transcription---', file,transcription);
 
 
                 });
