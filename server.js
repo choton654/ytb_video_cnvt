@@ -7,12 +7,12 @@ var OpenAI = require("openai");
 var axios = require("axios");
 const cp = require('child_process');
 const app = express();
-
+const {mongodbConnect} = require('./db/index')
 var http = require("http").createServer(app);
 const io = require("socket.io")(http);
 
 const port = process.env.PORT || 3000;
-
+mongodbConnect()
 var clientGlob = null;
 // TypeScript: import ytdl from 'ytdl-core'; with --esModuleInterop
 // TypeScript: import * as ytdl from 'ytdl-core'; with --allowSyntheticDefaultImports
