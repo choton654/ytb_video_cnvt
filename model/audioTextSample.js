@@ -7,6 +7,7 @@ const audiotextsamplesSchema = new mongoose.Schema({
         required: true,
         index: true
     },
+    title:String,
     segments: [
         {
             name: String,

@@ -7,10 +7,11 @@ var OpenAI = require("openai");
 var axios = require("axios");
 const cp = require('child_process');
 const app = express();
-const {mongodbConnect} = require('./db/index')
+const { mongodbConnect } = require('./db/index');
+const audiotextsampleModel = require("./model/audioTextSample");
 var http = require("http").createServer(app);
 const io = require("socket.io")(http);
-
+require('dotenv').config()
 const port = process.env.PORT || 3000;
 mongodbConnect()
 var clientGlob = null;
@@ -20,11 +21,23 @@ var clientGlob = null;
 // const smallLink = 'https://www.youtube.com/watch?v=nT6Be1Bqfoc'
 // const biglink = 'https://www.youtube.com/watch?v=QO66N1LrNCg'
 const openai = new OpenAI({
-  apiKey: ''
+  apiKey: process.env.OPENAI_API_KEY
 });
 const sourceAudio = path.join('audio.mp3')
 const outputAudio = path.join('public', 'audio', 'audio-segment_%03d.mp3')
 const directoryPath = path.join(__dirname, 'public', 'audio');
+
+
+const saveVideoData = async (data) => {
+  await audiotextsampleModel.findOneAndUpdate({ ytbId: data.videoId, title: data.title }, {
+    $push: {
+      segments: {
+        name: data.name,
+        text: data?.text
+      }
+    }
+  }, { upsert: true, new: true })
+}
 
 getAudio = async (videoURL, res) => {
   console.log(videoURL);
@@ -64,7 +77,7 @@ getAudio = async (videoURL, res) => {
 
     const ret = () => new Promise((resolve, reject) => {
       // 300 second segments
-      const sCommand = `ffmpeg -i "${sourceAudio}" -f segment -segment_time 1500 ${outputAudio}`
+      const sCommand = `ffmpeg -i "${sourceAudio}" -f segment -segment_time 300 ${outputAudio}`
 
       cp.exec(sCommand, (error, stdout, stderr) => {
 
@@ -91,7 +104,7 @@ getAudio = async (videoURL, res) => {
 
 
     ytdl.getInfo(videoURL).then((info) => {
-      console.log('---video info contentLength---', info.formats[0].contentLength);
+      // console.log('---video info---', info);
       console.log("title:", info.videoDetails.title);
       // console.log("rating:", info.player_response.videoDetails.averageRating);
       // console.log("uploaded by:", info.videoDetails.author.name);
@@ -100,37 +113,43 @@ getAudio = async (videoURL, res) => {
       clientGlob.emit("videoDetails", [
         info.videoDetails.title,
         info.videoDetails.author.name,
-        audioFormats
+        info.videoDetails.videoId
       ]);
       const audioFormat = info.formats.find(i => i.mimeType.startsWith("audio/mp4"))
       // const totalSize = parseInt(audioFormat.contentLength, 10);
       const totalSize = parseInt(audioFormat.approxDurationMs, 10);
-      console.log('---totalSize---', totalSize);
+      console.log('---duration in MS---', totalSize);
       transferVideo().then((d) => {
         if (d) {
           ret().then(v => {
             if (v.status === 'success') {
               fs.readdir(directoryPath, function (err, files) {
-           
+
                 if (err) {
                   return console.log('Unable to scan directory: ' + err);
                 }
                 const audioFiles = files.filter(f => f.startsWith('audio-segment'))
                 const loopLength = audioFiles.length
                 async function doSomething(n) {
-                  if(n === 0) {
-                    fs.unlink('audio.mp3',(err) => {
+                  if (n === 0) {
+                    fs.unlink('audio.mp3', (err) => {
                       if (err) throw err;
                     })
+
                     console.log("TASK COMPLETED!")
                     return
                   }
                   const transcription = await openai.audio.transcriptions.create({
                     model: 'whisper-1',
-                    file: fs.createReadStream(path.join(__dirname, "public", "audio", audioFiles[n-1])),
+                    file: fs.createReadStream(path.join(__dirname, "public", "audio", audioFiles[n - 1])),
                   })
-                  console.log('---transcription---',audioFiles[n-1],transcription);
-                  fs.unlink(path.join(__dirname, "public", "audio", audioFiles[n-1]), (err) => {
+                  console.log('---transcription---', audioFiles[n - 1], transcription);
+                  await saveVideoData({
+                    videoId: info.videoDetails.videoId,
+                    title: info.videoDetails.title,
+                    name: audioFiles[n - 1], text: transcription?.text
+                  })
+                  fs.unlink(path.join(__dirname, "public", "audio", audioFiles[n - 1]), (err) => {
                     if (err) throw err;
                   });
                   console.log("I'm doing something.")
@@ -139,7 +158,7 @@ getAudio = async (videoURL, res) => {
                 doSomething(loopLength)
               });
             }
-            console.log('--ffmpeg value---', v)
+            console.log('--ffmpeg value---', v.status)
           }).catch((e) => console.error('---ffmpeg error---', e))
 
         }
