@@ -11,6 +11,14 @@ const { mongodbConnect } = require('./db/index');
 const audiotextsampleModel = require("./model/audioTextSample");
 var http = require("http").createServer(app);
 const io = require("socket.io")(http);
+
+//langchain
+const { loadSummarizationChain , LLMChain} = require("langchain/chains");
+const { SearchApiLoader } = require("langchain/document_loaders/web/searchapi");
+const { TokenTextSplitter } = require("langchain/text_splitter");
+const { PromptTemplate } = require("langchain/prompts");
+const { ChatGoogleGenerativeAI } = require("@langchain/google-genai");
+
 require('dotenv').config()
 const port = process.env.PORT || 3000;
 mongodbConnect()
@@ -27,6 +35,13 @@ const sourceAudio = path.join('audio.mp3')
 const outputAudio = path.join('public', 'audio', 'audio-segment_%03d.mp3')
 const directoryPath = path.join(__dirname, 'public', 'audio');
 
+// const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// const llm = genAI.getGenerativeModel({ model: "gemini-pro" });
+const llm = new ChatGoogleGenerativeAI({
+  apiKey:process.env.GEMINI_API_KEY,
+  modelName: "gemini-pro",
+  maxOutputTokens: 2048,
+});
 
 const saveVideoData = async (data) => {
   await audiotextsampleModel.findOneAndUpdate({ ytbId: data.videoId, title: data.title }, {
@@ -135,7 +150,7 @@ getAudio = async (videoURL, res) => {
                     fs.unlink('audio.mp3', (err) => {
                       if (err) throw err;
                     })
-
+                    // await getSummerizeData(info.videoDetails.videoId)
                     console.log("TASK COMPLETED!")
                     return
                   }
@@ -187,9 +202,92 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "build", "client", "index.html"));
 });
 
+app.get("/getSummerizeData", async (req, res) => {
+  try {
+    const { videoId } = req.query
+    const sample = await audiotextsampleModel.findOne({ ytbId: videoId }).lean()
+    let mergeText = '';
+    sample.segments.reverse().forEach(t => {
+      mergeText += ` ${t.text}`
+    })
+    console.log('----mergeText---', mergeText);
+   
+   
+
+    // const splitter = new TokenTextSplitter({
+    //   chunkSize: 10000,
+    //   chunkOverlap: 250,
+    // });
+
+    // const docsSummary = await splitter.splitDocuments(docs);
+
+   
+
+    const summaryTemplate = `
+    You are an expert in summarizing YouTube videos.
+    Your goal is to create a summary of a podcast.
+    Below you find the transcript of a podcast:
+    --------
+    {text}
+    --------
+    
+    The transcript of the podcast will also be used as the basis for a question and answer bot.
+    Provide some examples questions and answers that could be asked about the podcast. Make these questions very specific.
+    
+    Total output will be a summary of the video and a list of example questions the user could ask of the video.
+    
+    SUMMARY AND QUESTIONS:
+    `;
+
+    const SUMMARY_PROMPT = PromptTemplate.fromTemplate(summaryTemplate);
+
+    const summaryRefineTemplate = `
+    You are an expert in summarizing YouTube videos.
+    Your goal is to create a summary of a podcast.
+    We have provided an existing summary up to a certain point: {existing_answer}
+    
+    Below you find the transcript of a podcast:
+    --------
+    {text}
+    --------
+    
+    Given the new context, refine the summary and example questions.
+    The transcript of the podcast will also be used as the basis for a question and answer bot.
+    Provide some examples questions and answers that could be asked about the podcast. Make
+    these questions very specific.
+    If the context isn't useful, return the original summary and questions.
+    Total output will be a summary of the video and a list of example questions the user could ask of the video.
+    
+    SUMMARY AND QUESTIONS:
+    `;
+
+    const SUMMARY_REFINE_PROMPT = PromptTemplate.fromTemplate(
+      summaryRefineTemplate
+    );
+    const summarizeChain = loadSummarizationChain(llm, {
+      type: "refine",
+      verbose: true,
+      questionPrompt: SUMMARY_PROMPT,
+      refinePrompt: SUMMARY_REFINE_PROMPT,
+
+    });
+
+    // const summary = await summarizeChain.invoke(mergeText);
+    const summary = await SUMMARY_PROMPT.invoke({text:mergeText})
+
+    console.log(summary);
+    await audiotextsampleModel.findOneAndUpdate({ ytbId: videoId },{summary},{new:true})
+    res.status(200).json({summary, mergeText })
+  } catch (error) {
+    console.error(error);
+    res.status(500).send('error')
+  }
+});
+
 app.post("/", async (req, res) => {
 
-  getAudio(req.body.url, res);
+  // getAudio(req.body.url, res);
+  res.end()
 });
 
 io.on("connection", (client) => {
