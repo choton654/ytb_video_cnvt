@@ -14,8 +14,8 @@ const io = require("socket.io")(http);
 
 //langchain
 const { loadSummarizationChain , LLMChain} = require("langchain/chains");
-const { SearchApiLoader } = require("langchain/document_loaders/web/searchapi");
-const { TokenTextSplitter } = require("langchain/text_splitter");
+const { CharacterTextSplitter } = require("langchain/text_splitter");
+const { Document } = require("langchain/document");
 const { PromptTemplate } = require("langchain/prompts");
 const { ChatGoogleGenerativeAI } = require("@langchain/google-genai");
 
@@ -210,18 +210,7 @@ app.get("/getSummerizeData", async (req, res) => {
     sample.segments.reverse().forEach(t => {
       mergeText += ` ${t.text}`
     })
-    console.log('----mergeText---', mergeText);
-   
-   
-
-    // const splitter = new TokenTextSplitter({
-    //   chunkSize: 10000,
-    //   chunkOverlap: 250,
-    // });
-
-    // const docsSummary = await splitter.splitDocuments(docs);
-
-   
+    // console.log('----mergeText---', mergeText);
 
     const summaryTemplate = `
     You are an expert in summarizing YouTube videos.
@@ -264,16 +253,23 @@ app.get("/getSummerizeData", async (req, res) => {
     const SUMMARY_REFINE_PROMPT = PromptTemplate.fromTemplate(
       summaryRefineTemplate
     );
+    const text_splitter = new CharacterTextSplitter({
+      separator: " ",
+      chunkSize: 7,
+      chunkOverlap: 3,
+    })
+    const newDoc = await text_splitter.createDocuments([mergeText])
     const summarizeChain = loadSummarizationChain(llm, {
-      type: "refine",
-      verbose: true,
-      questionPrompt: SUMMARY_PROMPT,
-      refinePrompt: SUMMARY_REFINE_PROMPT,
+      type: "stuff",
+      // verbose: true,
+      // questionPrompt: SUMMARY_PROMPT,
+      // refinePrompt: SUMMARY_REFINE_PROMPT,
 
     });
-
-    // const summary = await summarizeChain.invoke(mergeText);
-    const summary = await SUMMARY_PROMPT.invoke({text:mergeText})
+    console.log('---newDoc---',newDoc);
+    const summary = await summarizeChain.invoke({
+      input_documents: newDoc,
+    });
 
     console.log(summary);
     await audiotextsampleModel.findOneAndUpdate({ ytbId: videoId },{summary},{new:true})
@@ -286,8 +282,8 @@ app.get("/getSummerizeData", async (req, res) => {
 
 app.post("/", async (req, res) => {
 
-  // getAudio(req.body.url, res);
-  res.end()
+  getAudio(req.body.url, res);
+  // res.end()
 });
 
 io.on("connection", (client) => {
