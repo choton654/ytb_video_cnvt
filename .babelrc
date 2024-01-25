@@ -1,0 +1,15 @@
+{
+    "compact": true,
+    "ignore": [
+      // "./src",
+      "./build",
+      "./node_modules"
+    ],
+    "presets": [
+      ["@babel/preset-env", {
+        "targets": {
+          "node": "17.6.0"
+        }
+      }]
+    ]
+  }

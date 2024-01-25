@@ -10,16 +10,17 @@ const app = express();
 const { mongodbConnect } = require('./db/index');
 const audiotextsampleModel = require("./model/audioTextSample");
 var http = require("http").createServer(app);
-const io = require("socket.io")(http);
+// const io = require("socket.io")(http);
 
 //langchain
-const { loadSummarizationChain , LLMChain} = require("langchain/chains");
-const { CharacterTextSplitter , RecursiveCharacterTextSplitter} = require("langchain/text_splitter");
+const { loadSummarizationChain, LLMChain } = require("langchain/chains");
+const { CharacterTextSplitter, RecursiveCharacterTextSplitter } = require("langchain/text_splitter");
 
 const { OpenAI: OpenAILLM } = require("@langchain/openai");
 const { Document } = require("langchain/document");
 const { PromptTemplate } = require("langchain/prompts");
-const { ChatGoogleGenerativeAI } = require("@langchain/google-genai");
+// const { ChatGoogleGenerativeAI } = require("@langchain/google-genai");
+import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 
 
 require('dotenv').config()
@@ -38,16 +39,16 @@ const openaillm = new OpenAILLM({
   modelName: "gpt-3.5-turbo-instruct", // Defaults to "gpt-3.5-turbo-instruct" if no model provided.
   temperature: 0.9,
   openAIApiKey: process.env.OPENAI_API_KEY, // In Node.js defaults to process.env.OPENAI_API_KEY
-  maxTokens:4000
+  maxTokens: 4000
 });
 const sourceAudio = path.join('audio.mp3')
-const outputAudio = path.join('public', 'audio', 'audio-segment_%03d.mp3')
+const outputAudio = path.join('src', 'public', 'audio', 'audio-segment_%03d.mp3')
 const directoryPath = path.join(__dirname, 'public', 'audio');
 
 // const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 // const llm = genAI.getGenerativeModel({ model: "gemini-pro" });
 const llm = new ChatGoogleGenerativeAI({
-  apiKey:process.env.GEMINI_API_KEY,
+  apiKey: process.env.GEMINI_API_KEY,
   modelName: "gemini-pro",
   maxOutputTokens: 2048,
 });
@@ -63,7 +64,7 @@ const saveVideoData = async (data) => {
   }, { upsert: true, new: true })
 }
 
-getAudio = async (videoURL, res) => {
+const getAudio = async (videoURL, res) => {
   console.log(videoURL);
   try {
     const transferVideo = () => new Promise((resolve, reject) => {
@@ -134,11 +135,11 @@ getAudio = async (videoURL, res) => {
       // console.log("uploaded by:", info.videoDetails.author.name);
       let audioFormats = ytdl.filterFormats(info.formats, 'audioonly');
       console.log('Formats with only audio: ' + audioFormats.length);
-      clientGlob.emit("videoDetails", [
-        info.videoDetails.title,
-        info.videoDetails.author.name,
-        info.videoDetails.videoId
-      ]);
+      // clientGlob.emit("videoDetails", [
+      //   info.videoDetails.title,
+      //   info.videoDetails.author.name,
+      //   info.videoDetails.videoId
+      // ]);
       const audioFormat = info.formats.find(i => i.mimeType.startsWith("audio/mp4"))
       // const totalSize = parseInt(audioFormat.contentLength, 10);
       const totalSize = parseInt(audioFormat.approxDurationMs, 10);
@@ -172,17 +173,17 @@ getAudio = async (videoURL, res) => {
                     const newDoc = await text_splitter.createDocuments([mergeText])
                     const summarizeChain = loadSummarizationChain(llm, {
                       type: "stuff",
-                
+
                     });
                     // console.log('---newDoc---',newDoc);
                     const summary = await summarizeChain.invoke({
                       input_documents: newDoc,
                     });
-                
+
                     if (summary.text) {
-                      console.log('---summery---',summary.text);
-                      
-                      await audiotextsampleModel.findOneAndUpdate({ ytbId: videoId },{summary:summary.text},{new:true})
+                      console.log('---summery---', summary.text);
+
+                      await audiotextsampleModel.findOneAndUpdate({ ytbId: videoId }, { summary: summary.text }, { new: true })
                     }
 
 
@@ -231,11 +232,11 @@ app.use(express.json()); // to support JSON-encoded bodies
 app.use(express.urlencoded({ extended: true })); // to support URL-encoded bodies
 app.use(cors());
 
-app.use(express.static(path.join(__dirname, "client", "build")));
+// app.use(express.static(path.join(__dirname, "client", "build")));
 
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "build", "client", "index.html"));
-});
+// app.get("/", (req, res) => {
+//   res.sendFile(path.join(__dirname,  "client","build", "index.html"));
+// });
 
 // app.get("/getSummerizeData", async (req, res) => {
 //   try {
@@ -247,7 +248,7 @@ app.get("/", (req, res) => {
 //     })
 //     // console.log('----mergeText---', mergeText);
 
-   
+
 //     const text_splitter = new CharacterTextSplitter({
 //       separator: " ",
 //       chunkSize: 3000,
@@ -273,7 +274,7 @@ app.get("/", (req, res) => {
 
 //     if (summary.text) {
 //       console.log('---summery---',summary.text);
-      
+
 //       await audiotextsampleModel.findOneAndUpdate({ ytbId: videoId },{summary:summary.text},{new:true})
 //     }
 //     res.status(200).json({summary, mergeText })
@@ -289,10 +290,10 @@ app.post("/", async (req, res) => {
   // res.end()
 });
 
-io.on("connection", (client) => {
-  clientGlob = client;
-  console.log("User connected");
-});
+// io.on("connection", (client) => {
+//   clientGlob = client;
+//   console.log("User connected");
+// });
 
 http.listen(port, () => {
   console.log(`Example app listening at http://localhost:${port}`);
