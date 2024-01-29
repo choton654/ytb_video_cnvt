@@ -13,9 +13,12 @@ import process from 'process';
 import userModel from "../model/user";
 import jwt, { decode } from 'jsonwebtoken';
 import { validateLoginData, validateSignupData } from "../helpers/validation";
+import mongoose from "mongoose";
 
 const SOMETHING_WENT_WRONG = 'Something went wrong'
 const INVALID_INFORMATION = 'Invalid information'
+const AUTH_KEY_INVALID = 'Invalid auth key'
+const AUTH_KEY_BLANK = 'Blank auth key'
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -36,6 +39,15 @@ const sourceAudio = path.join('audio.mp3')
 const outputAudio = path.join('public', 'audio', 'audio-segment_%03d.mp3')
 const directoryPath = path.join(process.cwd(), 'public', 'audio');
 
+export function decodeKey(key) {
+  return new Promise((resolve, reject) => {
+    jwt.verify(key, process.env.JWT_SECRET, (err, decoded) => {
+      if (err || !decoded) return reject(false)
+      resolve(decoded);
+    })
+  });
+};
+
 export function generateAuthKey(data) {
   return new Promise((resolve, reject) => {
     const option = {  expiresIn: "3650d" };
@@ -53,6 +65,22 @@ export function generateAuthKey(data) {
   });
 }
 
+export function validateAuthKey(req, res, next) {
+  const bearerHeader = req.headers['authorization'];
+  const authToken = bearerHeader.split(' ');
+  if (!bearerHeader || authToken.length !== 2 || authToken[0] !== 'Bearer')
+      return res.status(401).json({ error: AUTH_KEY_INVALID });
+  const authKey = authToken[1];
+  if (!authKey) return res.status(401).json({ error: AUTH_KEY_BLANK });
+  decodeKey(authKey)
+  .then(decoded => {
+    if (!decoded || !decoded.uid) return res.status(401).json({ error: AUTH_KEY_INVALID });
+    req.decoded = decoded;
+    next();
+  })
+  .catch(err => {console.error(err); res.status(401).json({ error: AUTH_KEY_INVALID }) });
+};
+
 const saveVideoData = async (data) => {
   await audiotextsampleModel.findOneAndUpdate({ ytbId: data.videoId, title: data.title }, {
     $push: {
@@ -60,151 +88,158 @@ const saveVideoData = async (data) => {
         name: data.name,
         text: data?.text
       }
-    }
+    },
+    url:data.url,userId:data.userId
   }, { upsert: true, new: true })
 }
 
-export const getAudio = async (req, res) => {
-  const videoURL = req.body.url
-  console.log(videoURL);
-  console.log('---__dirname---',path.join(process.cwd()));
-  try {
-    const transferVideo = () => new Promise((resolve, reject) => {
-      try {
-
-        const stream = ytdl(videoURL, {
-          quality: "highestaudio",
-          filter: "audioonly"
-        });
-        stream.pipe(fs.createWriteStream("audio.mp3"));
-        stream.on('finish', () => {
-          resolve(true)
-
+export const getAudio = [validateAuthKey,
+  async (req, res) => {
+    const userId = req.decoded.uid;
+    const videoURL = req.body.url
+    console.log(videoURL);
+    console.log('---__dirname---',path.join(process.cwd()));
+    try {
+      const transferVideo = () => new Promise((resolve, reject) => {
+        try {
+  
+          const stream = ytdl(videoURL, {
+            quality: "highestaudio",
+            filter: "audioonly"
+          });
+          stream.pipe(fs.createWriteStream("audio.mp3"));
+          stream.on('finish', () => {
+            resolve(true)
+  
+          })
+  
+        } catch (error) {
+          console.error(error);
+          reject(false)
+        }
+      })
+  
+      const ret = () => new Promise((resolve, reject) => {
+        // 1500 second segments
+        const sCommand = `ffmpeg -i "${sourceAudio}" -f segment -segment_time 1500 ${outputAudio}`
+  
+        cp.exec(sCommand, (error, stdout, stderr) => {
+  
+          if (error) {
+            console.error('---ffm error---', error);
+            resolve({
+              status: 'error',
+            })
+  
+          } else {
+  
+            resolve({
+              status: 'success',
+              error: stderr,
+              out: stdout,
+            })
+  
+          }
+  
         })
-
-      } catch (error) {
-        console.error(error);
-        reject(false)
-      }
-    })
-
-    const ret = () => new Promise((resolve, reject) => {
-      // 1500 second segments
-      const sCommand = `ffmpeg -i "${sourceAudio}" -f segment -segment_time 1500 ${outputAudio}`
-
-      cp.exec(sCommand, (error, stdout, stderr) => {
-
-        if (error) {
-          console.error('---ffm error---', error);
-          resolve({
-            status: 'error',
-          })
-
-        } else {
-
-          resolve({
-            status: 'success',
-            error: stderr,
-            out: stdout,
-          })
-
-        }
-
+  
       })
-
-    })
-
-    ytdl.getInfo(videoURL).then((info) => {
-      console.log("title:", info.videoDetails.title);
-      let audioFormats = ytdl.filterFormats(info.formats, 'audioonly');
-      console.log('Formats with only audio: ' + audioFormats.length);
-
-      const audioFormat = info.formats.find(i => i.mimeType.startsWith("audio/mp4"))
-      const totalSize = parseInt(audioFormat.approxDurationMs, 10);
-      console.log('---duration in MS---', totalSize);
-      transferVideo().then((d) => {
-        if (d) {
-          ret().then(v => {
-            if (v.status === 'success') {
-              fs.readdir(directoryPath, function (err, files) {
-
-                if (err) {
-                  return console.log('Unable to scan directory: ' + err);
-                }
-                const audioFiles = files.filter(f => f.startsWith('audio-segment'))
-                const loopLength = audioFiles.length
-                async function doSomething(n) {
-                  if (n === 0) {
-                    fs.unlink('audio.mp3', (err) => {
-                      if (err) throw err;
-                    })
-                    const videoId = info.videoDetails.videoId
-                    const sample = await audiotextsampleModel.findOne({ ytbId: videoId }).lean()
-                    let mergeText = '';
-                    sample?.segments.reverse().forEach(t => {
-                      mergeText += ` ${t.text}`
-                    })
-                    const text_splitter = new CharacterTextSplitter({
-                      separator: " ",
-                      chunkSize: 3000,
-                    })
-                    const newDoc = await text_splitter.createDocuments([mergeText])
-                    const summarizeChain = loadSummarizationChain(llm, {
-                      type: "stuff",
-
-                    });
-                    // console.log('---newDoc---',newDoc);
-                    const summary = await summarizeChain.invoke({
-                      input_documents: newDoc,
-                    });
-
-                    if (summary.text) {
-                      console.log('---summery---', summary.text);
-
-                      await audiotextsampleModel.findOneAndUpdate({ ytbId: videoId }, { summary: summary.text }, { new: true })
-                    }
-
-
-                    console.log("TASK COMPLETED!")
-                    return
+  
+      ytdl.getInfo(videoURL).then((info) => {
+        console.log("title:", info.videoDetails.title);
+        let audioFormats = ytdl.filterFormats(info.formats, 'audioonly');
+        console.log('Formats with only audio: ' + audioFormats.length);
+  
+        const audioFormat = info.formats.find(i => i.mimeType.startsWith("audio/mp4"))
+        const totalSize = parseInt(audioFormat.approxDurationMs, 10);
+        console.log('---duration in MS---', totalSize);
+        transferVideo().then((d) => {
+          if (d) {
+            ret().then(v => {
+              if (v.status === 'success') {
+                fs.readdir(directoryPath, function (err, files) {
+  
+                  if (err) {
+                    return console.log('Unable to scan directory: ' + err);
                   }
-                  const transcription = await openai.audio.transcriptions.create({
-                    model: 'whisper-1',
-                    file: fs.createReadStream(path.join(process.cwd(), "public", "audio", audioFiles[n - 1])),
-                  })
-                  console.log('---transcription---', audioFiles[n - 1], transcription);
-                  await saveVideoData({
-                    videoId: info.videoDetails.videoId,
-                    title: info.videoDetails.title,
-                    name: audioFiles[n - 1], text: transcription?.text
-                  })
-                  fs.unlink(path.join(process.cwd(), "public", "audio", audioFiles[n - 1]), (err) => {
-                    if (err) throw err;
-                  });
-                  console.log("I'm doing something.")
-                  doSomething(n - 1)
-                }
-                doSomething(loopLength)
-              });
-            }
-            console.log('--ffmpeg value---', v?.status)
-          }).catch((e) => console.error('---ffmpeg error---', e))
-
-        }
-      })
-
-
-
-
-    });
-
-    res.status(200).send('success')
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).send('error')
+                  const audioFiles = files.filter(f => f.startsWith('audio-segment'))
+                  const loopLength = audioFiles.length
+                  async function doSomething(n) {
+                    if (n === 0) {
+                      fs.unlink('audio.mp3', (err) => {
+                        if (err) throw err;
+                      })
+                      const videoId = info.videoDetails.videoId
+                      const sample = await audiotextsampleModel.findOne({ ytbId: videoId }).lean()
+                      let mergeText = '';
+                      sample?.segments.reverse().forEach(t => {
+                        mergeText += ` ${t.text}`
+                      })
+                      const text_splitter = new CharacterTextSplitter({
+                        separator: " ",
+                        chunkSize: 3000,
+                      })
+                      const newDoc = await text_splitter.createDocuments([mergeText])
+                      const summarizeChain = loadSummarizationChain(llm, {
+                        type: "stuff",
+  
+                      });
+                      // console.log('---newDoc---',newDoc);
+                      const summary = await summarizeChain.invoke({
+                        input_documents: newDoc,
+                      });
+  
+                      if (summary.text) {
+                        console.log('---summery---', summary.text);
+  
+                        await audiotextsampleModel.findOneAndUpdate({ ytbId: videoId }, { summary: summary.text }, { new: true })
+                      }
+  
+  
+                      console.log("TASK COMPLETED!")
+                      return
+                    }
+                    const transcription = await openai.audio.transcriptions.create({
+                      model: 'whisper-1',
+                      file: fs.createReadStream(path.join(process.cwd(), "public", "audio", audioFiles[n - 1])),
+                    })
+                    console.log('---transcription---', audioFiles[n - 1], transcription);
+                    await saveVideoData({
+                      userId:new mongoose.Types.ObjectId(userId),
+                      url:videoURL,
+                      videoId: info.videoDetails.videoId,
+                      title: info.videoDetails.title,
+                      name: audioFiles[n - 1], text: transcription?.text
+                    })
+                    fs.unlink(path.join(process.cwd(), "public", "audio", audioFiles[n - 1]), (err) => {
+                      if (err) throw err;
+                    });
+                    console.log("I'm doing something.")
+                    doSomething(n - 1)
+                  }
+                  doSomething(loopLength)
+                });
+              }
+              console.log('--ffmpeg value---', v?.status)
+            }).catch((e) => console.error('---ffmpeg error---', e))
+  
+          }
+        })
+  
+  
+  
+  
+      });
+  
+      res.status(200).send('success')
+  
+    } catch (error) {
+      console.error(error);
+      res.status(500).send('error')
+    }
   }
-};
+
+] ;
 
 export const signup = async (req,res) => {
   const { value, error } = validateSignupData(req.body);
