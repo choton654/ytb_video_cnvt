@@ -10,6 +10,13 @@ import path from 'path';
 import cp from 'child_process';
 import fs from 'fs';
 import process from 'process';
+import userModel from "../model/user";
+import jwt, { decode } from 'jsonwebtoken';
+import { validateLoginData, validateSignupData } from "../helpers/validation";
+
+const SOMETHING_WENT_WRONG = 'Something went wrong'
+const INVALID_INFORMATION = 'Invalid information'
+
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
@@ -29,6 +36,22 @@ const sourceAudio = path.join('audio.mp3')
 const outputAudio = path.join('public', 'audio', 'audio-segment_%03d.mp3')
 const directoryPath = path.join(process.cwd(), 'public', 'audio');
 
+export function generateAuthKey(data) {
+  return new Promise((resolve, reject) => {
+    const option = {  expiresIn: "3650d" };
+    
+    jwt.sign(data, process.env.JWT_SECRET, option, (err, token) => {
+      if (err)
+        reject({
+          status: 403,
+          result: {
+            error: 'Error while generating auth key'
+          }
+        });
+      resolve(token);
+    });
+  });
+}
 
 const saveVideoData = async (data) => {
   await audiotextsampleModel.findOneAndUpdate({ ytbId: data.videoId, title: data.title }, {
@@ -183,3 +206,38 @@ export const getAudio = async (req, res) => {
   }
 };
 
+export const signup = async (req,res) => {
+  const { value, error } = validateSignupData(req.body);
+  if (error) return res.status(400).send({ error: INVALID_INFORMATION });
+  try {
+    await userModel.findOneAndUpdate({email:req.body.email},req.body,{upsert:true,new:true})
+    
+    const newUser = await userModel.findOne({email:req.body.email}).lean()
+    const authKey = await generateAuthKey({ uid: newUser._id, email:newUser.email, name:newUser.firstName });
+    return res.status(200).json({msg:'Success', user:newUser, authKey})
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: SOMETHING_WENT_WRONG });
+    
+  }
+}
+export const login = async (req,res) => {
+  const { value, error } = validateLoginData(req.body);
+  if (error) return res.status(400).send({ error: INVALID_INFORMATION });
+  try {
+    
+    const loginUser = await userModel.findOne({email:req.body.email,password:req.body.password}).lean()
+    if (loginUser) {
+      var authKey = await generateAuthKey({ uid: loginUser._id, email:loginUser.email, name:loginUser.firstName });
+      return res.status(200).json({msg:'Success', user:loginUser, authKey})
+      
+    }else{
+      return res.status(200).json({msg:'User not found',})
+
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: SOMETHING_WENT_WRONG });
+    
+  }
+}
