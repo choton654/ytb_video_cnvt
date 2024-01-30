@@ -50,8 +50,8 @@ export function decodeKey(key) {
 
 export function generateAuthKey(data) {
   return new Promise((resolve, reject) => {
-    const option = {  expiresIn: "3650d" };
-    
+    const option = { expiresIn: "3650d" };
+
     jwt.sign(data, process.env.JWT_SECRET, option, (err, token) => {
       if (err)
         reject({
@@ -69,16 +69,16 @@ export function validateAuthKey(req, res, next) {
   const bearerHeader = req.headers['authorization'];
   const authToken = bearerHeader.split(' ');
   if (!bearerHeader || authToken.length !== 2 || authToken[0] !== 'Bearer')
-      return res.status(401).json({ error: AUTH_KEY_INVALID });
+    return res.status(401).json({ error: AUTH_KEY_INVALID });
   const authKey = authToken[1];
   if (!authKey) return res.status(401).json({ error: AUTH_KEY_BLANK });
   decodeKey(authKey)
-  .then(decoded => {
-    if (!decoded || !decoded.uid) return res.status(401).json({ error: AUTH_KEY_INVALID });
-    req.decoded = decoded;
-    next();
-  })
-  .catch(err => {console.error(err); res.status(401).json({ error: AUTH_KEY_INVALID }) });
+    .then(decoded => {
+      if (!decoded || !decoded.uid) return res.status(401).json({ error: AUTH_KEY_INVALID });
+      req.decoded = decoded;
+      next();
+    })
+    .catch(err => { console.error(err); res.status(401).json({ error: AUTH_KEY_INVALID }) });
 };
 
 const saveVideoData = async (data) => {
@@ -89,7 +89,7 @@ const saveVideoData = async (data) => {
         text: data?.text
       }
     },
-    url:data.url,userId:data.userId
+    url: data.url, userId: data.userId
   }, { upsert: true, new: true })
 }
 
@@ -97,12 +97,10 @@ export const getAudio = [validateAuthKey,
   async (req, res) => {
     const userId = req.decoded.uid;
     const videoURL = req.body.url
-    console.log(videoURL);
-    console.log('---__dirname---',path.join(process.cwd()));
     try {
       const transferVideo = () => new Promise((resolve, reject) => {
         try {
-  
+
           const stream = ytdl(videoURL, {
             quality: "highestaudio",
             filter: "audioonly"
@@ -110,46 +108,48 @@ export const getAudio = [validateAuthKey,
           stream.pipe(fs.createWriteStream("audio.mp3"));
           stream.on('finish', () => {
             resolve(true)
-  
+
           })
-  
+
         } catch (error) {
           console.error(error);
           reject(false)
         }
       })
-  
+
       const ret = () => new Promise((resolve, reject) => {
         // 1500 second segments
         const sCommand = `ffmpeg -i "${sourceAudio}" -f segment -segment_time 1500 ${outputAudio}`
-  
+
         cp.exec(sCommand, (error, stdout, stderr) => {
-  
+
           if (error) {
             console.error('---ffm error---', error);
             resolve({
               status: 'error',
             })
-  
+
           } else {
-  
+
             resolve({
               status: 'success',
               error: stderr,
               out: stdout,
             })
-  
+
           }
-  
+
         })
-  
+
       })
-  
-      ytdl.getInfo(videoURL).then((info) => {
+
+      ytdl.getInfo(videoURL).then(async (info) => {
         console.log("title:", info.videoDetails.title);
-        let audioFormats = ytdl.filterFormats(info.formats, 'audioonly');
-        console.log('Formats with only audio: ' + audioFormats.length);
-  
+        // let audioFormats = ytdl.filterFormats(info.formats, 'audioonly');
+        // console.log('Formats with only audio: ' + audioFormats.length);
+        await audiotextsampleModel.findOneAndUpdate({ userId: new mongoose.Types.ObjectId(userId), ytbId: info.videoDetails.videoId, }, { title: info.videoDetails.title, url: videoURL, userId, status: 1 }, { upsert: true, new: true })
+        res.status(200).json({ msg: 'success' })
+
         const audioFormat = info.formats.find(i => i.mimeType.startsWith("audio/mp4"))
         const totalSize = parseInt(audioFormat.approxDurationMs, 10);
         console.log('---duration in MS---', totalSize);
@@ -158,7 +158,7 @@ export const getAudio = [validateAuthKey,
             ret().then(v => {
               if (v.status === 'success') {
                 fs.readdir(directoryPath, function (err, files) {
-  
+
                   if (err) {
                     return console.log('Unable to scan directory: ' + err);
                   }
@@ -182,20 +182,20 @@ export const getAudio = [validateAuthKey,
                       const newDoc = await text_splitter.createDocuments([mergeText])
                       const summarizeChain = loadSummarizationChain(llm, {
                         type: "stuff",
-  
+
                       });
                       // console.log('---newDoc---',newDoc);
                       const summary = await summarizeChain.invoke({
                         input_documents: newDoc,
                       });
-  
+
                       if (summary.text) {
                         console.log('---summery---', summary.text);
-  
-                        await audiotextsampleModel.findOneAndUpdate({ ytbId: videoId }, { summary: summary.text }, { new: true })
+
+                        await audiotextsampleModel.findOneAndUpdate({ ytbId: videoId, userId: new mongoose.Types.ObjectId(userId) }, { summary: summary.text, status: 3 }, { new: true })
                       }
-  
-  
+
+
                       console.log("TASK COMPLETED!")
                       return
                     }
@@ -204,13 +204,16 @@ export const getAudio = [validateAuthKey,
                       file: fs.createReadStream(path.join(process.cwd(), "public", "audio", audioFiles[n - 1])),
                     })
                     console.log('---transcription---', audioFiles[n - 1], transcription);
-                    await saveVideoData({
-                      userId:new mongoose.Types.ObjectId(userId),
-                      url:videoURL,
-                      videoId: info.videoDetails.videoId,
-                      title: info.videoDetails.title,
-                      name: audioFiles[n - 1], text: transcription?.text
-                    })
+                    await audiotextsampleModel.findOneAndUpdate({ ytbId: info.videoDetails.videoId,userId: new mongoose.Types.ObjectId(userId)  }, {
+                      $push: {
+                        segments: {
+                          name: audioFiles[n - 1],
+                          text: transcription?.text
+                        }
+                      },
+                      status: 2
+                    }, { upsert: true, new: true })
+
                     fs.unlink(path.join(process.cwd(), "public", "audio", audioFiles[n - 1]), (err) => {
                       if (err) throw err;
                     });
@@ -222,57 +225,59 @@ export const getAudio = [validateAuthKey,
               }
               console.log('--ffmpeg value---', v?.status)
             }).catch((e) => console.error('---ffmpeg error---', e))
-  
+
           }
         })
-  
-  
-  
-  
+
+
+
+
+      }).catch(e => {
+
+        res.status(400).json({ msg: 'cannot convert video' })
       });
-  
-      res.status(200).send('success')
-  
+
+
     } catch (error) {
       console.error(error);
       res.status(500).send('error')
     }
   }
 
-] ;
+];
 
-export const signup = async (req,res) => {
+export const signup = async (req, res) => {
   const { value, error } = validateSignupData(req.body);
   if (error) return res.status(400).send({ error: INVALID_INFORMATION });
   try {
-    await userModel.findOneAndUpdate({email:req.body.email},req.body,{upsert:true,new:true})
-    
-    const newUser = await userModel.findOne({email:req.body.email}).lean()
-    const authKey = await generateAuthKey({ uid: newUser._id, email:newUser.email, name:newUser.firstName });
-    return res.status(200).json({msg:'Success', user:newUser, authKey})
+    await userModel.findOneAndUpdate({ email: req.body.email }, req.body, { upsert: true, new: true })
+
+    const newUser = await userModel.findOne({ email: req.body.email }).lean()
+    const authKey = await generateAuthKey({ uid: newUser._id, email: newUser.email, name: newUser.firstName });
+    return res.status(200).json({ msg: 'Success', user: newUser, authKey })
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: SOMETHING_WENT_WRONG });
-    
+
   }
 }
-export const login = async (req,res) => {
+export const login = async (req, res) => {
   const { value, error } = validateLoginData(req.body);
   if (error) return res.status(400).send({ error: INVALID_INFORMATION });
   try {
-    
-    const loginUser = await userModel.findOne({email:req.body.email,password:req.body.password}).lean()
+
+    const loginUser = await userModel.findOne({ email: req.body.email, password: req.body.password }).lean()
     if (loginUser) {
-      var authKey = await generateAuthKey({ uid: loginUser._id, email:loginUser.email, name:loginUser.firstName });
-      return res.status(200).json({msg:'Success', user:loginUser, authKey})
-      
-    }else{
-      return res.status(200).json({msg:'User not found',})
+      var authKey = await generateAuthKey({ uid: loginUser._id, email: loginUser.email, name: loginUser.firstName });
+      return res.status(200).json({ msg: 'Success', user: loginUser, authKey })
+
+    } else {
+      return res.status(200).json({ msg: 'User not found', })
 
     }
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: SOMETHING_WENT_WRONG });
-    
+
   }
 }
