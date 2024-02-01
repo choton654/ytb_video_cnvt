@@ -7,7 +7,7 @@ var http = require("http").createServer(app);
 import routes from './routes';
 
 require('dotenv').config()
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 8000;
 mongodbConnect()
 
 // TypeScript: import ytdl from 'ytdl-core'; with --esModuleInterop

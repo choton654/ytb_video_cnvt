@@ -81,18 +81,6 @@ export function validateAuthKey(req, res, next) {
     .catch(err => { console.error(err); res.status(401).json({ error: AUTH_KEY_INVALID }) });
 };
 
-const saveVideoData = async (data) => {
-  await audiotextsampleModel.findOneAndUpdate({ ytbId: data.videoId, title: data.title }, {
-    $push: {
-      segments: {
-        name: data.name,
-        text: data?.text
-      }
-    },
-    url: data.url, userId: data.userId
-  }, { upsert: true, new: true })
-}
-
 export const getAudio = [validateAuthKey,
   async (req, res) => {
     const userId = req.decoded.uid;

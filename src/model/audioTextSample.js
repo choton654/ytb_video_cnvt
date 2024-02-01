@@ -27,6 +27,7 @@ const audiotextsamplesSchema = new mongoose.Schema({
 });
 
 audiotextsamplesSchema.index({ ytbId: true });
+audiotextsamplesSchema.index({ userId:1,ytbId: 1 },{unique:true});
 
 const audiotextsampleModel = mongoose.model('audiotextsample',
  audiotextsamplesSchema);
