@@ -192,7 +192,7 @@ export const getAudio = [validateAuthKey,
                       file: fs.createReadStream(path.join(process.cwd(), "public", "audio", audioFiles[n - 1])),
                     })
                     console.log('---transcription---', audioFiles[n - 1], transcription);
-                    await audiotextsampleModel.findOneAndUpdate({ ytbId: info.videoDetails.videoId,userId: new mongoose.Types.ObjectId(userId)  }, {
+                    await audiotextsampleModel.findOneAndUpdate({ ytbId: info.videoDetails.videoId, userId: new mongoose.Types.ObjectId(userId) }, {
                       $push: {
                         segments: {
                           name: audioFiles[n - 1],
@@ -233,6 +233,74 @@ export const getAudio = [validateAuthKey,
   }
 
 ];
+
+export const getSummery = [
+  validateAuthKey, async (req, res) => {
+    const userId = req.decoded.uid;
+    const ytbId = req.params.ytbId
+    try {
+      const sample = await audiotextsampleModel.findOne({ ytbId: ytbId }).lean()
+      let mergeText = '';
+      sample?.segments.reverse().forEach(t => {
+        mergeText += ` ${t.text}`
+      })
+      const text_splitter = new CharacterTextSplitter({
+        separator: " ",
+        chunkSize: 3000,
+      })
+      const newDoc = await text_splitter.createDocuments([mergeText])
+      const summarizeChain = loadSummarizationChain(llm, {
+        type: "stuff",
+
+      });
+      // console.log('---newDoc---',newDoc);
+      const summary = await summarizeChain.invoke({
+        input_documents: newDoc,
+      });
+
+      if (summary.text) {
+        console.log('---summery---', summary.text);
+
+        await audiotextsampleModel.findOneAndUpdate({ ytbId: videoId, userId: new mongoose.Types.ObjectId(userId) }, { summary: summary.text, status: 3 }, { new: true })
+      }
+      return res.status(200).json({ msg: 'Success', data: summary?.text })
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: SOMETHING_WENT_WRONG });
+    }
+  }
+]
+export const getTranscript = [
+  validateAuthKey, async (req, res) => {
+    const userId = req.decoded.uid;
+    try {
+      const data = await audiotextsampleModel.find({
+        userId: new mongoose.Types.ObjectId(userId)
+      }).select(['title', 'status', 'ytbId']).lean().sort({ updatedAt: -1 })
+      return res.status(200).json({ msg: 'Success', data })
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: SOMETHING_WENT_WRONG });
+    }
+  }
+]
+
+export const getYtbDetails = [
+  validateAuthKey, async (req, res) => {
+    const userId = req.decoded.uid;
+    const ytbId = req.params.ytbId
+    try {
+      const data = await audiotextsampleModel.findOne({
+        ytbId,
+        userId: new mongoose.Types.ObjectId(userId)
+      }).lean().select(['-__v'])
+      return res.status(200).json({ msg: 'Success', data })
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: SOMETHING_WENT_WRONG });
+    }
+  }
+]
 
 export const signup = async (req, res) => {
   const { value, error } = validateSignupData(req.body);

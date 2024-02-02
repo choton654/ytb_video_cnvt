@@ -24,7 +24,7 @@ const audiotextsamplesSchema = new mongoose.Schema({
             text: String
         }
     ]
-});
+},{ timestamps: { createdAt: true, updatedAt: true } });
 
 audiotextsamplesSchema.index({ ytbId: true });
 audiotextsamplesSchema.index({ userId:1,ytbId: 1 },{unique:true});

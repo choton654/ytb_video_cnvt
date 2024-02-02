@@ -2,8 +2,9 @@
 
 import { Box, Button, Container, HStack, Input, Modal, ModalContent, ModalOverlay, Stack, useDisclosure } from "@chakra-ui/react";
 import axios from "axios";
-import { useCallback, useState } from "react";
-const baseUrl = "http://localhost:8000";
+import { useCallback, useEffect, useState } from "react";
+import { baseUrl } from "../utils/baseUrl";
+import { UserState } from "../context/userState";
 
 export default function Home() {
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -14,6 +15,7 @@ export default function Home() {
   const [lastName, setlastName] = useState("");
   const [email, setemail] = useState("");
   const [password, setpassword] = useState("");
+  const { isAuth, setisAuth } = UserState();
 
   const handleSubmit = useCallback(async () => {
     try {
@@ -25,56 +27,58 @@ export default function Home() {
           lastName,
           signUptype: "manual",
         });
+        setisAuth(data?.authKey)
         window.localStorage.setItem("token", data?.authKey);
         window.localStorage.setItem("ytbUser", JSON.stringify(data?.user));
-        onClose()
+        onClose();
+        window.location.assign("/dashboard")
       } else {
         const { data } = await axios.post(`${baseUrl}/api/user/login`, {
           email,
           password,
         });
+        setisAuth(data?.authKey)
         window.localStorage.setItem("token", data?.authKey);
         window.localStorage.setItem("ytbUser", JSON.stringify(data?.user));
-        onClose()
+        onClose();
+        window.location.assign("/dashboard")
       }
     } catch (error) {
       console.error(error);
     }
   }, [notHaveAnAccount, email, password, firstName, lastName]);
 
-const handleStartNow = useCallback(
-  async () => {
-    const token = window.localStorage.getItem('token')
+  const handleStartNow = useCallback(async () => {
+    const token = window.localStorage.getItem("token");
     if (token) {
       try {
-        
-        if (!ytbUrl.includes('www.youtube.com')) {
-          alert('Please enter valid youtube url')
-          return
+        if (!ytbUrl.includes("www.youtube.com")) {
+          alert("Please enter valid youtube url");
+          return;
         }
-        const { data } = await axios.post(`${baseUrl}/api/ytbvideo/send`, {
-          url:ytbUrl
-        },{
-          headers:{
-            'Authorization':`Bearer ${token}`
+        const { data } = await axios.post(
+          `${baseUrl}/api/ytbvideo/send`,
+          {
+            url: ytbUrl,
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
           }
-        });
-        console.log('---ytb data---',data);
-        if (data && data?.msg === 'success') {
-          setytbUrl('')
-          alert('Your video is being precessed')
+        );
+        console.log("---ytb data---", data);
+        if (data && data?.msg === "success") {
+          setytbUrl("");
+          window.location.assign("/dashboard");
         }
       } catch (error) {
         console.error(error);
-        
       }
-    }else{
-      onOpen()
+    } else {
+      onOpen();
     }
-  },
-  [ytbUrl],
-)
-
+  }, [ytbUrl]);
 
   return (
     <>
@@ -82,10 +86,19 @@ const handleStartNow = useCallback(
         <Box fontSize={"30px"} textAlign={"center"}>
           YouTube Video to Text and Summery
         </Box>
-        <Input onChange={(e) => setytbUrl(e.target.value)} focusBorderColor="black" variant="flushed" size={"lg"} placeholder="Provide your YouTube Video Link here" />
+        <Input
+          onChange={(e) => setytbUrl(e.target.value)}
+          focusBorderColor="black"
+          variant="flushed"
+          size={"lg"}
+          placeholder="Provide your YouTube Video Link here"
+        />
         <Button size={"sm"} w={"190px"} fontWeight={"400"} colorScheme={"black"} bg={"black"} onClick={handleStartNow}>
           START NOW
         </Button>
+        {isAuth && <Button size={"sm"} w={"190px"} fontWeight={"400"} colorScheme={"black"} bg={"black"} onClick={() => window.location.assign("/dashboard")}>
+          DASHBOARD
+        </Button>}
       </Container>
       <Modal isOpen={isOpen} onClose={onClose}>
         <ModalOverlay />

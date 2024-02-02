@@ -1,4 +1,5 @@
-import { ChakraProvider } from '@chakra-ui/react'
+import { ChakraProvider } from "@chakra-ui/react";
+import { UserContextProvider } from "../context/userState";
 
 export const metadata = {
   title: "Create Next App",
@@ -10,10 +11,9 @@ export default function RootLayout({ children }) {
     <html lang="en">
       <body>
         <ChakraProvider>
-          {children}
+          <UserContextProvider>{children}</UserContextProvider>
         </ChakraProvider>
       </body>
     </html>
-
   );
 }
