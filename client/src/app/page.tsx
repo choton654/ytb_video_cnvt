@@ -2,9 +2,17 @@
 
 import { Box, Button, Container, HStack, Input, Modal, ModalContent, ModalOverlay, Stack, useDisclosure } from "@chakra-ui/react";
 import axios from "axios";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { baseUrl } from "../utils/baseUrl";
 import { UserState } from "../context/userState";
+
+const validateEmail = (email) => {
+  return String(email)
+    .toLowerCase()
+    .match(
+      /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|.(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/
+    );
+};
 
 export default function Home() {
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -19,6 +27,10 @@ export default function Home() {
 
   const handleSubmit = useCallback(async () => {
     try {
+      if (!validateEmail(email)) {
+        alert('Please enter valid email')
+        return;
+      }
       if (notHaveAnAccount) {
         const { data } = await axios.post(`${baseUrl}/api/user/signup`, {
           email,
@@ -27,23 +39,24 @@ export default function Home() {
           lastName,
           signUptype: "manual",
         });
-        setisAuth(data?.authKey)
+        setisAuth(data?.authKey);
         window.localStorage.setItem("token", data?.authKey);
         window.localStorage.setItem("ytbUser", JSON.stringify(data?.user));
         onClose();
-        window.location.assign("/dashboard")
+        window.location.assign("/dashboard");
       } else {
         const { data } = await axios.post(`${baseUrl}/api/user/login`, {
           email,
           password,
         });
-        setisAuth(data?.authKey)
+        setisAuth(data?.authKey);
         window.localStorage.setItem("token", data?.authKey);
         window.localStorage.setItem("ytbUser", JSON.stringify(data?.user));
         onClose();
-        window.location.assign("/dashboard")
+        window.location.assign("/dashboard");
       }
     } catch (error) {
+      alert('User not found')
       console.error(error);
     }
   }, [notHaveAnAccount, email, password, firstName, lastName]);
@@ -81,7 +94,43 @@ export default function Home() {
   }, [ytbUrl]);
 
   return (
-    <>
+    <Box position={"relative"}>
+      <HStack position={"absolute"} top={"5%"} right={"10%"}>
+        <Button
+          size={"sm"}
+          fontWeight={"500"}
+          color={"black"}
+          colorScheme={"white"}
+          bg={"white"}
+          onClick={() => {
+            if (notHaveAnAccount) {
+              onOpen();
+            } else {
+              onToggle();
+              onOpen();
+            }
+          }}
+        >
+          Signup
+        </Button>
+        <Button
+          size={"sm"}
+          fontWeight={"500"}
+          color={"black"}
+          colorScheme={"white"}
+          bg={"white"}
+          onClick={() => {
+            if (!notHaveAnAccount) {
+              onOpen();
+            } else {
+              onToggle();
+              onOpen();
+            }
+          }}
+        >
+          Login
+        </Button>
+      </HStack>
       <Container h={"100vh"} display={"flex"} flexDirection={"column"} justifyContent={"center"} alignItems={"center"} gridGap={"60px"}>
         <Box fontSize={"30px"} textAlign={"center"}>
           YouTube Video to Text and Summery
@@ -96,9 +145,11 @@ export default function Home() {
         <Button size={"sm"} w={"190px"} fontWeight={"400"} colorScheme={"black"} bg={"black"} onClick={handleStartNow}>
           START NOW
         </Button>
-        {isAuth && <Button size={"sm"} w={"190px"} fontWeight={"400"} colorScheme={"black"} bg={"black"} onClick={() => window.location.assign("/dashboard")}>
-          DASHBOARD
-        </Button>}
+        {isAuth && (
+          <Button size={"sm"} w={"190px"} fontWeight={"400"} colorScheme={"black"} bg={"black"} onClick={() => window.location.assign("/dashboard")}>
+            DASHBOARD
+          </Button>
+        )}
       </Container>
       <Modal isOpen={isOpen} onClose={onClose}>
         <ModalOverlay />
@@ -150,6 +201,6 @@ export default function Home() {
           </Container>
         </ModalContent>
       </Modal>
-    </>
+    </Box>
   );
 }
