@@ -4,7 +4,7 @@ import ytdl from "ytdl-core";
 import audiotextsampleModel from "../model/audioTextSample";
 import { loadSummarizationChain } from "langchain/chains";
 import { CharacterTextSplitter } from "langchain/text_splitter";
-// import { OpenAI as OpenAILLM } from "@langchain/openai";
+import { OpenAI as OpenAILLM } from "@langchain/openai";
 
 import path from 'path';
 import cp from 'child_process';
@@ -23,17 +23,17 @@ const AUTH_KEY_BLANK = 'Blank auth key'
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
-// const openaillm = new OpenAILLM({
-//   modelName: "gpt-3.5-turbo-instruct", // Defaults to "gpt-3.5-turbo-instruct" if no model provided.
-//   temperature: 0.9,
-//   openAIApiKey: process.env.OPENAI_API_KEY, // In Node.js defaults to process.env.OPENAI_API_KEY
-//   maxTokens: 4000
-// });
-const llm = new ChatGoogleGenerativeAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  modelName: "gemini-pro",
-  maxOutputTokens: 2048,
+const llm = new OpenAILLM({
+  modelName: "gpt-3.5-turbo-instruct", // Defaults to "gpt-3.5-turbo-instruct" if no model provided.
+  temperature: 0.9,
+  openAIApiKey: process.env.OPENAI_API_KEY, // In Node.js defaults to process.env.OPENAI_API_KEY
+  maxTokens: 4000
 });
+// const llm = new ChatGoogleGenerativeAI({
+//   apiKey: process.env.GEMINI_API_KEY,
+//   modelName: "gemini-pro",
+//   maxOutputTokens: 2048,
+// });
 
 const sourceAudio = path.join('audio.mp3')
 const outputAudio = path.join('public', 'audio', 'audio-segment_%03d.mp3')
