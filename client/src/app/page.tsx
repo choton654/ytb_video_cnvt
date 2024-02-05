@@ -28,7 +28,7 @@ export default function Home() {
   const handleSubmit = useCallback(async () => {
     try {
       if (!validateEmail(email)) {
-        alert('Please enter valid email')
+        alert("Please enter valid email");
         return;
       }
       if (notHaveAnAccount) {
@@ -56,7 +56,7 @@ export default function Home() {
         window.location.assign("/dashboard");
       }
     } catch (error) {
-      alert('User not found')
+      alert("User not found");
       console.error(error);
     }
   }, [notHaveAnAccount, email, password, firstName, lastName]);
@@ -96,40 +96,59 @@ export default function Home() {
   return (
     <Box position={"relative"}>
       <HStack position={"absolute"} top={"5%"} right={"10%"}>
-        <Button
-          size={"sm"}
-          fontWeight={"500"}
-          color={"black"}
-          colorScheme={"white"}
-          bg={"white"}
-          onClick={() => {
-            if (notHaveAnAccount) {
-              onOpen();
-            } else {
-              onToggle();
-              onOpen();
-            }
-          }}
-        >
-          Signup
-        </Button>
-        <Button
-          size={"sm"}
-          fontWeight={"500"}
-          color={"black"}
-          colorScheme={"white"}
-          bg={"white"}
-          onClick={() => {
-            if (!notHaveAnAccount) {
-              onOpen();
-            } else {
-              onToggle();
-              onOpen();
-            }
-          }}
-        >
-          Login
-        </Button>
+        {isAuth ? (
+          <Button
+            size={"sm"}
+            fontWeight={"500"}
+            color={"black"}
+            colorScheme={"white"}
+            bg={"white"}
+            onClick={() => {
+              window.localStorage.removeItem("token");
+              window.localStorage.removeItem("ytbUser");
+              window.location.reload()
+            }}
+          >
+            Logout
+          </Button>
+        ) : (
+          <>
+            <Button
+              size={"sm"}
+              fontWeight={"500"}
+              color={"black"}
+              colorScheme={"white"}
+              bg={"white"}
+              onClick={() => {
+                if (notHaveAnAccount) {
+                  onOpen();
+                } else {
+                  onToggle();
+                  onOpen();
+                }
+              }}
+            >
+              Signup
+            </Button>
+            <Button
+              size={"sm"}
+              fontWeight={"500"}
+              color={"black"}
+              colorScheme={"white"}
+              bg={"white"}
+              onClick={() => {
+                if (!notHaveAnAccount) {
+                  onOpen();
+                } else {
+                  onToggle();
+                  onOpen();
+                }
+              }}
+            >
+              Login
+            </Button>
+          </>
+        )}
       </HStack>
       <Container h={"100vh"} display={"flex"} flexDirection={"column"} justifyContent={"center"} alignItems={"center"} gridGap={"60px"}>
         <Box fontSize={"30px"} textAlign={"center"}>

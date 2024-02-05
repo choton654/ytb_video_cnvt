@@ -13,6 +13,7 @@
   "author": "Subhadeep Paul",
   "license": "ISC",
   "dependencies": {
+    "@google/generative-ai": "^0.2.0",
     "@hapi/joi": "^17.1.1",
     "@langchain/google-genai": "^0.0.7",
     "axios": "^1.6.5",

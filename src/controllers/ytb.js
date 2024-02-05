@@ -5,7 +5,7 @@ import audiotextsampleModel from "../model/audioTextSample";
 import { loadSummarizationChain } from "langchain/chains";
 import { CharacterTextSplitter } from "langchain/text_splitter";
 import { OpenAI as OpenAILLM } from "@langchain/openai";
-
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import path from 'path';
 import cp from 'child_process';
 import fs from 'fs';
@@ -19,7 +19,8 @@ const SOMETHING_WENT_WRONG = 'Something went wrong'
 const INVALID_INFORMATION = 'Invalid information'
 const AUTH_KEY_INVALID = 'Invalid auth key'
 const AUTH_KEY_BLANK = 'Blank auth key'
-
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
@@ -253,17 +254,20 @@ export const getSummery = [
         type: "stuff",
 
       });
-      // console.log('---newDoc---',newDoc);
       const summary = await summarizeChain.invoke({
         input_documents: newDoc,
       });
-
+      console.log('--mergeText--',mergeText);
+      // const prompt = `Summarize this text.
+      // Text:`
+      // const result = await model.generateContent([prompt, mergeText]);
+      // console.log('---summery---', result.response.text());
       if (summary.text) {
         console.log('---summery---', summary.text);
 
         await audiotextsampleModel.findOneAndUpdate({ ytbId: videoId, userId: new mongoose.Types.ObjectId(userId) }, { summary: summary.text, status: 3 }, { new: true })
       }
-      return res.status(200).json({ msg: 'Success', data: summary?.text })
+      return res.status(200).json({ msg: 'Success', })
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: SOMETHING_WENT_WRONG });
