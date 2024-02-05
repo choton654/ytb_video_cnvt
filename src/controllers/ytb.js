@@ -3,7 +3,7 @@ import OpenAI from "openai";
 import ytdl from "ytdl-core";
 import audiotextsampleModel from "../model/audioTextSample";
 import { loadSummarizationChain } from "langchain/chains";
-import { CharacterTextSplitter } from "langchain/text_splitter";
+import { CharacterTextSplitter, TokenTextSplitter } from "langchain/text_splitter";
 import { OpenAI as OpenAILLM } from "@langchain/openai";
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import path from 'path';
@@ -24,21 +24,30 @@ const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
-const llm = new OpenAILLM({
-  modelName: "gpt-3.5-turbo-instruct", // Defaults to "gpt-3.5-turbo-instruct" if no model provided.
-  temperature: 0.9,
-  openAIApiKey: process.env.OPENAI_API_KEY, // In Node.js defaults to process.env.OPENAI_API_KEY
-  maxTokens: 4000
-});
-// const llm = new ChatGoogleGenerativeAI({
-//   apiKey: process.env.GEMINI_API_KEY,
-//   modelName: "gemini-pro",
-//   maxOutputTokens: 2048,
+// const llm = new OpenAILLM({
+//   modelName: "gpt-3.5-turbo-instruct", // Defaults to "gpt-3.5-turbo-instruct" if no model provided.
+//   temperature: 0.9,
+//   openAIApiKey: process.env.OPENAI_API_KEY, // In Node.js defaults to process.env.OPENAI_API_KEY
+//   maxTokens: 4000
 // });
+const llm = new ChatGoogleGenerativeAI({
+  apiKey: process.env.GEMINI_API_KEY,
+  modelName: "gemini-pro",
+  maxOutputTokens: 4000,
+});
 
 const sourceAudio = path.join('audio.mp3')
 const outputAudio = path.join('public', 'audio', 'audio-segment_%03d.mp3')
 const directoryPath = path.join(process.cwd(), 'public', 'audio');
+
+function truncatePrompt(prompt, maxTokens) {
+  const tokens = prompt.split(/\s+/); // simple whitespace tokenization
+  if (tokens.length > maxTokens) {
+      tokens.splice(maxTokens); // truncate tokens array if it exceeds maxTokens
+  }
+  return tokens.join(' ');
+}
+
 
 export function decodeKey(key) {
   return new Promise((resolve, reject) => {
@@ -167,8 +176,11 @@ export const getAudio = [validateAuthKey,
                       const text_splitter = new CharacterTextSplitter({
                         separator: " ",
                         chunkSize: 3000,
+                        chunkOverlap:0
                       })
-                      const newDoc = await text_splitter.createDocuments([mergeText])
+                      const max_prompt_tokens = 4096 - 256 
+                      const prompt = truncatePrompt(mergeText,max_prompt_tokens)
+                      const newDoc = await text_splitter.createDocuments([prompt])
                       const summarizeChain = loadSummarizationChain(llm, {
                         type: "stuff",
 
@@ -248,8 +260,16 @@ export const getSummery = [
       const text_splitter = new CharacterTextSplitter({
         separator: " ",
         chunkSize: 3000,
+        chunkOverlap:0
       })
-      const newDoc = await text_splitter.createDocuments([mergeText])
+      // const text_splitter = new TokenTextSplitter({
+      //   encodingName: "gpt2",
+      //   chunkSize: 3000,
+      //   chunkOverlap: 500,
+      // });
+      const max_prompt_tokens = 4096 - 256 
+      const prompt = truncatePrompt(mergeText,max_prompt_tokens)
+      const newDoc = await text_splitter.createDocuments([prompt])
       const summarizeChain = loadSummarizationChain(llm, {
         type: "stuff",
 
@@ -257,7 +277,7 @@ export const getSummery = [
       const summary = await summarizeChain.invoke({
         input_documents: newDoc,
       });
-      console.log('--mergeText--',mergeText);
+      // console.log('--mergeText--',mergeText);
       // const prompt = `Summarize this text.
       // Text:`
       // const result = await model.generateContent([prompt, mergeText]);
@@ -265,7 +285,7 @@ export const getSummery = [
       if (summary.text) {
         console.log('---summery---', summary.text);
 
-        await audiotextsampleModel.findOneAndUpdate({ ytbId: videoId, userId: new mongoose.Types.ObjectId(userId) }, { summary: summary.text, status: 3 }, { new: true })
+        await audiotextsampleModel.findOneAndUpdate({ ytbId }, { summary: summary.text, status: 3 },{upsert:true, new:true})
       }
       return res.status(200).json({ msg: 'Success', })
     } catch (error) {
