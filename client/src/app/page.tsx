@@ -42,6 +42,8 @@ export default function Home() {
         setisAuth(data?.authKey);
         window.localStorage.setItem("token", data?.authKey);
         window.localStorage.setItem("ytbUser", JSON.stringify(data?.user));
+        await handleStartNow(1, data?.authKey);
+        window.localStorage.removeItem("ytbUrl");
         onClose();
         window.location.assign("/dashboard");
       } else {
@@ -52,6 +54,8 @@ export default function Home() {
         setisAuth(data?.authKey);
         window.localStorage.setItem("token", data?.authKey);
         window.localStorage.setItem("ytbUser", JSON.stringify(data?.user));
+        await handleStartNow(1, data?.authKey);
+        window.localStorage.removeItem("ytbUrl");
         onClose();
         window.location.assign("/dashboard");
       }
@@ -61,56 +65,74 @@ export default function Home() {
     }
   }, [notHaveAnAccount, email, password, firstName, lastName]);
 
-  const handleStartNow = useCallback(async () => {
-    const token = window.localStorage.getItem("token");
-    if (token) {
-      try {
-        if (!ytbUrl.includes("www.youtube.com")) {
-          alert("Please enter valid youtube url");
-          return;
-        }
-        const { data } = await axios.post(
-          `${baseUrl}/api/ytbvideo/send`,
-          {
-            url: ytbUrl,
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-        console.log("---ytb data---", data);
-        if (data && data?.msg === "success") {
-          setytbUrl("");
-          window.location.assign("/dashboard");
-        }
-      } catch (error) {
-        console.error(error);
+  const handleStartNow = useCallback(
+    async (type = 1, token = undefined) => {
+      if (!ytbUrl.includes("www.youtube.com")) {
+        alert("Please enter valid youtube url");
+        return;
       }
-    } else {
-      onOpen();
-    }
-  }, [ytbUrl]);
+      if (token) {
+        console.log(token);
+
+        try {
+          const { data } = await axios.post(
+            `${baseUrl}/api/ytbvideo/send`,
+            {
+              url: ytbUrl,
+            },
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
+          // console.log("---ytb data---", data);
+          setytbUrl("");
+          if (type === 2 && data && data?.msg === "success") {
+            window.location.assign("/dashboard");
+          }
+        } catch (error) {
+          console.error(error);
+        }
+      } else {
+        window.localStorage.setItem("ytbUrl", ytbUrl);
+        onOpen();
+      }
+    },
+    [ytbUrl]
+  );
+
+  const handleLogout = useCallback(() => {
+    window.localStorage.removeItem("token");
+    window.localStorage.removeItem("ytbUser");
+    window.localStorage.removeItem("ytbUrl");
+    window.location.reload();
+  }, []);
+
+  const handleLoginSignUp = useCallback(
+    (p: Boolean) => {
+      if (p ? notHaveAnAccount : !notHaveAnAccount) {
+        onOpen();
+      } else {
+        onToggle();
+        onOpen();
+      }
+    },
+    [notHaveAnAccount]
+  );
 
   return (
     <Box position={"relative"}>
       <HStack position={"absolute"} top={"5%"} right={"10%"}>
         {isAuth ? (
-          <Button
-            size={"sm"}
-            fontWeight={"500"}
-            color={"black"}
-            colorScheme={"white"}
-            bg={"white"}
-            onClick={() => {
-              window.localStorage.removeItem("token");
-              window.localStorage.removeItem("ytbUser");
-              window.location.reload()
-            }}
-          >
-            Logout
-          </Button>
+          <>
+            <Button size={"sm"} fontWeight={"500"} color={"black"} colorScheme={"white"} bg={"white"} onClick={() => window.location.assign("/dashboard")}>
+              DASHBOARD
+            </Button>
+            <Button size={"sm"} fontWeight={"500"} color={"black"} colorScheme={"white"} bg={"white"} onClick={handleLogout}>
+              Logout
+            </Button>
+          </>
         ) : (
           <>
             <Button
@@ -120,12 +142,7 @@ export default function Home() {
               colorScheme={"white"}
               bg={"white"}
               onClick={() => {
-                if (notHaveAnAccount) {
-                  onOpen();
-                } else {
-                  onToggle();
-                  onOpen();
-                }
+                handleLoginSignUp(true);
               }}
             >
               Signup
@@ -137,12 +154,7 @@ export default function Home() {
               colorScheme={"white"}
               bg={"white"}
               onClick={() => {
-                if (!notHaveAnAccount) {
-                  onOpen();
-                } else {
-                  onToggle();
-                  onOpen();
-                }
+                handleLoginSignUp(false);
               }}
             >
               Login
@@ -161,14 +173,20 @@ export default function Home() {
           size={"lg"}
           placeholder="Provide your YouTube Video Link here"
         />
-        <Button size={"sm"} w={"190px"} fontWeight={"400"} colorScheme={"black"} bg={"black"} onClick={handleStartNow}>
+        <Button
+          size={"sm"}
+          w={"190px"}
+          fontWeight={"400"}
+          colorScheme={"black"}
+          bg={"black"}
+          onClick={() => {
+            const token = window.localStorage.getItem("token");
+
+            handleStartNow(2, token);
+          }}
+        >
           START NOW
         </Button>
-        {isAuth && (
-          <Button size={"sm"} w={"190px"} fontWeight={"400"} colorScheme={"black"} bg={"black"} onClick={() => window.location.assign("/dashboard")}>
-            DASHBOARD
-          </Button>
-        )}
       </Container>
       <Modal isOpen={isOpen} onClose={onClose}>
         <ModalOverlay />

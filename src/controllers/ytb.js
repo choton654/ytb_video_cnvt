@@ -178,7 +178,8 @@ export const getAudio = [validateAuthKey,
                         chunkSize: 3000,
                         chunkOverlap:0
                       })
-                      const max_prompt_tokens = 4096 - 256 
+                      // const max_prompt_tokens = 4096 - 256 
+                      const max_prompt_tokens = 4096
                       const prompt = truncatePrompt(mergeText,max_prompt_tokens)
                       const newDoc = await text_splitter.createDocuments([prompt])
                       const summarizeChain = loadSummarizationChain(llm, {
