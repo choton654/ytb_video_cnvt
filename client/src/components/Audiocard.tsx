@@ -35,6 +35,10 @@ function Audiocard({ data, token }) {
             <Box color={"green"} fontWeight={"bold"} fontSize={"12px"}>
               Completed
             </Box>
+          ) : data.status === 2 ? (
+            <Box color={"orange"} fontWeight={"bold"} fontSize={"12px"}>
+              Creating chunks
+            </Box>
           ) : (
             <Box color={"orange"} fontWeight={"bold"} fontSize={"12px"}>
               Processing
